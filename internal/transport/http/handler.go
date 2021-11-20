@@ -1,6 +1,7 @@
 package http
 
 import (
+	"encoding/json"
 	"fmt"
 	"net/http"
 	"strconv"
@@ -13,6 +14,12 @@ import (
 type Handler struct {
 	Router  *mux.Router
 	Service *comment.Service
+}
+
+// Response - an object to store responses from the api
+type Response struct {
+	Message string
+	Error   string
 }
 
 // NewHandler - returns a pointer to a Handler
@@ -34,7 +41,9 @@ func (h *Handler) SetupRoutes() {
 	h.Router.HandleFunc("/api/comment/{id}", h.DeleteComment).Methods("DELETE")
 
 	h.Router.HandleFunc("/api/health", func(w http.ResponseWriter, r *http.Request) {
-		fmt.Fprintf(w, "I am alive!")
+		w.Header().Set("Content-Type", "application/json; charset=UTF-8")
+		w.WriteHeader(http.StatusOK)
+		RespondJson(w, http.StatusOK, Response{Message: "I am Alive"})
 	})
 }
 
@@ -45,46 +54,76 @@ func (h *Handler) GetComment(w http.ResponseWriter, r *http.Request) {
 
 	i, err := strconv.ParseUint(id, 10, 64)
 	if err != nil {
-		fmt.Fprintf(w, "Unable to parse UINT from ID")
+		RespondJson(w, http.StatusInternalServerError,
+			Response{Message: "Unable to parse UINT from ID", Error: err.Error()})
+		return
 	}
 
 	comment, err := h.Service.GetComment(uint(i))
 	if err != nil {
-		fmt.Fprintf(w, "Error Retrieving Comment By")
+		RespondJson(w, http.StatusInternalServerError,
+			Response{Message: "Error Retrieving Comment By", Error: err.Error()})
+		return
 	}
 
-	fmt.Fprintf(w, "%+v", comment)
+	RespondJson(w, http.StatusOK, comment)
 }
 
 // GetAllComments - retrieve all comments from the comment service
 func (h *Handler) GetAllComments(w http.ResponseWriter, r *http.Request) {
 	comments, err := h.Service.GetAllComments()
 	if err != nil {
-		fmt.Fprintf(w, "Failed to retrieve all comments")
+		RespondJson(w, http.StatusInternalServerError,
+			Response{Message: "Failed to retrieve all comments", Error: err.Error()})
+		return
 	}
-	fmt.Fprintf(w, "%+v", comments)
+	RespondJson(w, http.StatusOK, comments)
 }
 
 // PostComment - creates a new comment
 func (h *Handler) PostComment(w http.ResponseWriter, r *http.Request) {
-	comment, err := h.Service.PostComment(comment.Comment{
-		Slug: "/",
-	})
-	if err != nil {
-		fmt.Fprintf(w, "Failed to post new comment")
+	var comment comment.Comment
+	if err := json.NewDecoder(r.Body).Decode(&comment); err != nil {
+		fmt.Fprintf(w, "Failed to decode JSON Body")
+		RespondJson(w, http.StatusInternalServerError,
+			Response{Message: "Failed to decode JSON Body", Error: err.Error()})
+		return
 	}
-	fmt.Fprintf(w, "%+v", comment)
+	comment, err := h.Service.PostComment(comment)
+	if err != nil {
+		RespondJson(w, http.StatusInternalServerError,
+			Response{Message: "Failed to post new comment", Error: err.Error()})
+		return
+	}
+	RespondJson(w, http.StatusCreated, comment)
 }
 
 // UpdateComment - updates a comment by ID
 func (h *Handler) UpdateComment(w http.ResponseWriter, r *http.Request) {
-	comment, err := h.Service.UpdateComment(1, comment.Comment{
-		Slug: "/new",
-	})
-	if err != nil {
-		fmt.Fprintf(w, "Failed to update comment")
+	var comment comment.Comment
+	if err := json.NewDecoder(r.Body).Decode(&comment); err != nil {
+		RespondJson(w, http.StatusInternalServerError,
+			Response{Message: "Failed to decode JSON Body", Error: err.Error()})
+		return
 	}
-	fmt.Fprintf(w, "%+v", comment)
+
+	vars := mux.Vars(r)
+	id := vars["id"]
+
+	commentID, err := strconv.ParseUint(id, 10, 64)
+	if err != nil {
+		RespondJson(w, http.StatusInternalServerError,
+			Response{Message: "Failed to parse uint from ID", Error: err.Error()})
+		return
+	}
+
+	comment, err = h.Service.UpdateComment(uint(commentID), comment)
+	if err != nil {
+		RespondJson(w, http.StatusInternalServerError,
+			Response{Message: "Failed to update comment", Error: err.Error()})
+		return
+	}
+	RespondJson(w, http.StatusOK, comment)
 }
 
 // DeleteComment - deletes a comment by ID
@@ -94,12 +133,16 @@ func (h *Handler) DeleteComment(w http.ResponseWriter, r *http.Request) {
 
 	commentID, err := strconv.ParseUint(id, 10, 64)
 	if err != nil {
-		fmt.Fprintf(w, "Failed to parse uint from ID")
+		RespondJson(w, http.StatusInternalServerError,
+			Response{Message: "Failed to parse uint from ID", Error: err.Error()})
+		return
 	}
 
 	err = h.Service.DeleteComment(uint(commentID))
 	if err != nil {
-		fmt.Fprintf(w, "Failed to delete comment by comment ID")
+		RespondJson(w, http.StatusInternalServerError,
+			Response{Message: "Failed to delete comment by comment ID", Error: err.Error()})
+		return
 	}
-	fmt.Fprintf(w, "Successfully deleted comment")
+	RespondJson(w, http.StatusOK, Response{Message: "Successfully deleted comment"})
 }
