@@ -4,6 +4,8 @@ import (
 	"fmt"
 	"net/http"
 
+	"github.com/anfelo/comments-api/internal/comment"
+	"github.com/anfelo/comments-api/internal/database"
 	transportHTTP "github.com/anfelo/comments-api/internal/transport/http"
 )
 
@@ -15,7 +17,15 @@ type App struct{}
 func (a *App) Run() error {
 	fmt.Println("Setting Up Out APP")
 
-	handler := transportHTTP.NewHandler()
+	var err error
+	db, err := database.NewDatabase()
+	if err != nil {
+		return err
+	}
+
+	commentService := comment.NewService(db)
+
+	handler := transportHTTP.NewHandler(commentService)
 	handler.SetupRoutes()
 
 	if err := http.ListenAndServe(":8080", handler.Router); err != nil {
