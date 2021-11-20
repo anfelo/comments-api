@@ -2,7 +2,7 @@
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: api.tutorialedge.net
+  name: comments-api
 spec:
   replicas: 3
   strategy:
@@ -12,11 +12,11 @@ spec:
       maxUnavailable: 0
   selector:
     matchLabels:
-      name: api.tutorialedge.net
+      name: comments-api
   template:
     metadata:
       labels:
-        name: api.tutorialedge.net
+        name: comments-api
     spec:
       containers:
       - name: application
